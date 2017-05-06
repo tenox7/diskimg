@@ -132,9 +132,6 @@ int wmain(int argc, WCHAR *argv[]) {
     if(SetFilePointerEx(hDisk, Offset, NULL, FILE_BEGIN) == 0) 
         error(1, L"Unable to Set File Pointer for Offset [%ull] ", Offset.QuadPart);
 
-    if(Offset.QuadPart > 0)
-        DiskLengthInfo.Length.QuadPart -= Offset.QuadPart;
-
     // Open File
     if((hFile = CreateFileW(FileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL)) == INVALID_HANDLE_VALUE) 
         error(1, L"Unable to open file %s ", FileName);
@@ -151,7 +148,7 @@ int wmain(int argc, WCHAR *argv[]) {
     }
 
     if(FileSize.QuadPart+Offset.QuadPart > DiskLengthInfo.Length.QuadPart)
-        error(0, L"File size + offset is larger than disk size!");
+        error(0, L"File size + offset is larger than disk size!\n%llu + %llu > %llu", FileSize.QuadPart, Offset.QuadPart, DiskLengthInfo.Length.QuadPart);
 
     TotalBytesRead.QuadPart=0;
 
