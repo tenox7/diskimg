@@ -2,6 +2,7 @@
 // Restores raw sectors from a file to physical drive
 // Yet another rawrite or dd for Windows. Features:
 // Allows for an offset / no. 512 sectors to skip
+// Allows file "nul" it will just erase disk (dd if=nul)
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,10 +68,12 @@ int wmain(int argc, WCHAR *argv[]) {
     DISK_GEOMETRY           DiskGeom;
     LARGE_INTEGER           Offset;
     LARGE_INTEGER           TotalBytesRead;
+    LARGE_INTEGER           TotalBytesWritten;
     LARGE_INTEGER           FileSize;
     LARGE_INTEGER           Zero;
     size_t                  size=0;
     DWORD                   BytesRead=0;
+    DWORD                   BytesWritten=0;
     DWORD                   ret=0;
     DWORD                   NullFile=0;
     int                     n=0;
@@ -175,15 +178,17 @@ int wmain(int argc, WCHAR *argv[]) {
         wprintf(L"Offset at sector 0, deleting disk partitions...\n");
         if (!DeviceIoControl(hDisk, IOCTL_DISK_DELETE_DRIVE_LAYOUT, NULL, 0, NULL, 0, &BytesRet, NULL))
             error(1, L"Error on DeviceIoControl IOCTL_DISK_DELETE_DRIVE_LAYOUT [%d] ", BytesRet);
+
+        FlushFileBuffers(hDisk);
+
     }
 
     if(FileSize.QuadPart+Offset.QuadPart > DiskLengthInfo.Length.QuadPart)
         error(0, L"File size + offset is larger than disk size!\n%llu + %llu > %llu", FileSize.QuadPart, Offset.QuadPart, DiskLengthInfo.Length.QuadPart);
 
     TotalBytesRead.QuadPart=0;
+    TotalBytesWritten.QuadPart=0;
 
-
-// TODO: suport end of disk case eg total bytes written+offset > diskneght
     do {
         if(!NullFile) {
             ZeroMemory(Buff, BUFFER_SIZE);
@@ -195,10 +200,14 @@ int wmain(int argc, WCHAR *argv[]) {
             BytesRead=BUFFER_SIZE;
         }
 
-        if (WriteFile(hDisk, Buff, BytesRead, NULL, NULL) == 0)
+        if(TotalBytesWritten.QuadPart+Offset.QuadPart+BytesRead > DiskLengthInfo.Length.QuadPart)
+            BytesRead=DiskLengthInfo.Length.QuadPart-(TotalBytesWritten.QuadPart+Offset.QuadPart);
+
+        if (WriteFile(hDisk, Buff, BytesRead, &BytesWritten, NULL) == 0)
             error(1, L"Error writing to disk");
         
         TotalBytesRead.QuadPart+=BytesRead;
+        TotalBytesWritten.QuadPart+=BytesWritten;
         
         if(n++ % nth==0)
             wprintf(L"W [%d] [%.1f MB] [%.1f%%]                 \r", 
@@ -209,11 +218,11 @@ int wmain(int argc, WCHAR *argv[]) {
 
         FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE));
     }
-    while (BytesRead!=0);
+    while (BytesRead);
 
     FlushFileBuffers(hDisk);
 
-    wprintf(L"\rDone! [%.1f MB] (%llu bytes) [%.1f%%]                  \n", (float)TotalBytesRead.QuadPart/1024.0/1024.0, TotalBytesRead.QuadPart, (float)TotalBytesRead.QuadPart*100.0/FileSize.QuadPart );
+    wprintf(L"\rDone! [%.1f MB] (%llu bytes) [%.1f%%]                  \n", (float)TotalBytesRead.QuadPart/1024.0/1024.0, TotalBytesWritten.QuadPart, (float)TotalBytesWritten.QuadPart*100.0/FileSize.QuadPart );
 
     if (!DeviceIoControl(hDisk, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &BytesRet, NULL))
         error(1, L"Error on DeviceIoControl FSCTL_UNLOCK_VOLUME [%d] ", BytesRet);
