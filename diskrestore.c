@@ -69,6 +69,7 @@ int wmain(int argc, WCHAR *argv[]) {
     size_t                  size=0;
     DWORD                   BytesRead=0;
     DWORD                   ret=0;
+    DWORD                   NullFile=0;
     int                     n=0;
     int                     nth=25; // how often to print status
     LARGE_INTEGER           pres, pstart, pend;
@@ -86,7 +87,10 @@ int wmain(int argc, WCHAR *argv[]) {
     FileName = argv[1];
     DiskNo = argv[2];
     Offset.QuadPart = (argc==4) ? _wtoi64(argv[3]) * 512 : 0;
- 
+
+    if (wcscmp(FileName, L"nul")==0)
+        NullFile=1;
+
     if(_wcsnicmp(DiskNo, L"\\\\.\\PhysicalDrive", wcslen(L"\\\\.\\PhysicalDrive")) == 0)
         wcsncpy_s(DevName, sizeof(DevName), DiskNo, sizeof(DevName));
     else if(iswdigit(DiskNo[0]))
@@ -129,17 +133,26 @@ int wmain(int argc, WCHAR *argv[]) {
             DiskLengthInfo.Length.QuadPart
     );
 
+    // Offset
     if(SetFilePointerEx(hDisk, Offset, NULL, FILE_BEGIN) == 0) 
         error(1, L"Unable to Set File Pointer for Offset [%ull] ", Offset.QuadPart);
 
+    if(Offset.QuadPart) 
+        wprintf(L"Offset: %llu (0x%llX) sectors, %llu (0x%llX) bytes\n", _wtoi64(argv[3]), _wtoi64(argv[3]), Offset.QuadPart, Offset.QuadPart);
+
     // Open File
-    if((hFile = CreateFileW(FileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL)) == INVALID_HANDLE_VALUE) 
-        error(1, L"Unable to open file %s ", FileName);
+    if(!NullFile) {
+        if((hFile = CreateFileW(FileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL)) == INVALID_HANDLE_VALUE) 
+            error(1, L"Unable to open file %s ", FileName);
 
-    if(GetFileSizeEx(hFile, &FileSize) == 0)
-        error(1, L"Unable to get file sie for file %s ", FileName);
+        if(GetFileSizeEx(hFile, &FileSize) == 0)
+            error(1, L"Unable to get file sie for file %s ", FileName);
+    }
+    else {
+        FileSize.QuadPart=DiskLengthInfo.Length.QuadPart;
+    }
 
-    wprintf(L"File: %s  Size: %.1f MB \n", FileName, (float)FileSize.QuadPart/1024.0/1024.0);
+    wprintf(L"File: %s  Size: %.1f MB Nul=%d\n", FileName, (float)FileSize.QuadPart/1024.0/1024.0, NullFile);
 
     if(Offset.QuadPart == 0) {
         wprintf(L"Offset at sector 0, deleting disk partitions...\n");
@@ -153,10 +166,17 @@ int wmain(int argc, WCHAR *argv[]) {
     TotalBytesRead.QuadPart=0;
 
     do {
-        ZeroMemory(Buff, BUFFER_SIZE);
+        if(!NullFile) {
+            ZeroMemory(Buff, BUFFER_SIZE);
 
-        if (ReadFile(hFile, Buff, BUFFER_SIZE, &BytesRead, NULL) == 0) 
-            error(1, L"Error reading file");
+            if (ReadFile(hFile, Buff, BUFFER_SIZE, &BytesRead, NULL) == 0) 
+                error(1, L"Error reading file");
+        }
+        else {
+            //todo: manage end of disk scenario
+            // if totalbytesread+buffer_size > filesize ...
+            BytesRead=BUFFER_SIZE;
+        }
 
         if (WriteFile(hDisk, Buff, BytesRead, NULL, NULL) == 0)
             error(1, L"Error writing to disk");
