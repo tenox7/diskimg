@@ -1,5 +1,6 @@
-// DiskRestore 1.0 by Antoni Sawicki <as@tenoware.com>
+// DiskRestore 1.2 by Antoni Sawicki <as@tenoware.com>
 // Restores raw sectors from a file to physical drive
+// Yet another rawrite or dd for Windows. Features:
 // Allows for an offset / no. 512 sectors to skip
 #include <windows.h>
 #include <stdio.h>
@@ -23,6 +24,7 @@
               L"- get-disk\n"\
               L"- get-physicaldisk | ft deviceid,friendlyname\n\n"\
               L"Long form \\\\.\\PhysicalDriveXX is also allowed\n\n"\
+              L"A and B floppy drives are also allowed\n\n"\
               L"sect_skip is number of 512 bytes sectors to skip\n\n"
 
 void error(int exit, WCHAR *msg, ...) {
@@ -62,6 +64,7 @@ int wmain(int argc, WCHAR *argv[]) {
     WCHAR                   *FileName;
     ULONG                   BytesRet;
     GET_LENGTH_INFORMATION  DiskLengthInfo;
+    DISK_GEOMETRY           DiskGeom;
     LARGE_INTEGER           Offset;
     LARGE_INTEGER           TotalBytesRead;
     LARGE_INTEGER           FileSize;
@@ -79,7 +82,7 @@ int wmain(int argc, WCHAR *argv[]) {
     WCHAR *ft[] = { L"Non-Removable", L"Removable" };
     WCHAR *bus[] = { L"UNKNOWN", L"SCSI", L"ATAPI", L"ATA", L"1394", L"SSA", L"FC", L"USB", L"RAID", L"ISCSI", L"SAS", L"SATA", L"SD", L"MMC", L"VIRTUAL", L"VHD", L"MAX", L"NVME"};
 
-    wprintf(L"DiskRestore v1.0 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
+    wprintf(L"DiskRestore v1.2 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
 
     if(argc < 3) 
         error(1, L"Wrong number of parameters [argc=%d]\n\n%s\n", argc, USAGE);
@@ -95,6 +98,8 @@ int wmain(int argc, WCHAR *argv[]) {
         wcsncpy_s(DevName, sizeof(DevName), DiskNo, sizeof(DevName));
     else if(iswdigit(DiskNo[0]))
         _snwprintf_s(DevName, sizeof(DevName) / sizeof(WCHAR), sizeof(DevName), L"\\\\.\\PhysicalDrive%s", DiskNo);
+    else if(DiskNo[0]=='a' || DiskNo[0]=='A' || DiskNo[0]=='b' || DiskNo[0]=='B')
+        _snwprintf_s(DevName, sizeof(DevName) / sizeof(WCHAR), sizeof(DevName), L"\\\\.\\%c:", DiskNo[0]);
     else
         error(1, USAGE, argv[0]);
 
@@ -108,8 +113,17 @@ int wmain(int argc, WCHAR *argv[]) {
     if(DeviceIoControl(hDisk, FSCTL_ALLOW_EXTENDED_DASD_IO, NULL, 0, NULL, 0, &BytesRet, NULL))
         error(1, L"Error on DeviceIoControl FSCTL_ALLOW_EXTENDED_DASD_IO");
 
-    if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0, &DiskLengthInfo, sizeof(GET_LENGTH_INFORMATION), &BytesRet, NULL))
-        error(1, L"Error on DeviceIoControl IOCTL_DISK_GET_LENGTH_INFO [%d] ", BytesRet);
+    // Try to obtain disk lenght. On removable media the first DISK_GET_LENGTH is not supported
+    if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0, &DiskLengthInfo, sizeof(GET_LENGTH_INFORMATION), &BytesRet, NULL)) {
+        if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &DiskGeom, sizeof(DISK_GEOMETRY), &BytesRet, NULL)) 
+            error(1, L"Error on DeviceIoControl IOCTL_DISK_GET_DRIVE_GEOMETRY [%d] ", BytesRet);
+        
+        DiskLengthInfo.Length.QuadPart = DiskGeom.Cylinders.QuadPart *  DiskGeom.TracksPerCylinder *  DiskGeom.SectorsPerTrack * DiskGeom.BytesPerSector;
+    }
+
+    if(!DiskLengthInfo.Length.QuadPart)
+        error(1, L"Unable to obtain disk lenght info");
+
 
     if (!DeviceIoControl(hDisk, IOCTL_STORAGE_QUERY_PROPERTY, &desc_q, sizeof(desc_q), &desc_h, sizeof(desc_h), &BytesRet, NULL))
         error(1, L"Error on DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY Device Property [%d] ", BytesRet);
@@ -123,7 +137,7 @@ int wmain(int argc, WCHAR *argv[]) {
     if(desc_d->Version != sizeof(STORAGE_DEVICE_DESCRIPTOR)) 
         error(1, L"STORAGE_DEVICE_DESCRIPTOR is wrong size [%d] should be [%d]", desc_d->Version, sizeof(STORAGE_DEVICE_DESCRIPTOR));
 
-    wprintf(L"Disk %s: %s %s %S %S Size: %.1f MB  (%llu bytes)  \n", 
+    wprintf(L"Disk %s %s %s %S %S %.1f MB  (%llu bytes)  \n", 
             DiskNo,
             (desc_d->RemovableMedia<=1)  ? ft[desc_d->RemovableMedia] : L"(n/a)",
             (desc_d->BusType<=17)        ? bus[desc_d->BusType] : bus[0],
@@ -152,9 +166,12 @@ int wmain(int argc, WCHAR *argv[]) {
         FileSize.QuadPart=DiskLengthInfo.Length.QuadPart;
     }
 
-    wprintf(L"File: %s  Size: %.1f MB Nul=%d\n", FileName, (float)FileSize.QuadPart/1024.0/1024.0, NullFile);
+    wprintf(L"File %s %.1f MB (%llu bytes) Nul=%d\n", FileName, (float)FileSize.QuadPart/1024.0/1024.0, FileSize.QuadPart, NullFile);
 
-    if(Offset.QuadPart == 0) {
+    Sleep(5000);
+    
+    // Floppy Disks don't support delete drive layout
+    if(iswdigit(DiskNo[0]) && Offset.QuadPart == 0) {
         wprintf(L"Offset at sector 0, deleting disk partitions...\n");
         if (!DeviceIoControl(hDisk, IOCTL_DISK_DELETE_DRIVE_LAYOUT, NULL, 0, NULL, 0, &BytesRet, NULL))
             error(1, L"Error on DeviceIoControl IOCTL_DISK_DELETE_DRIVE_LAYOUT [%d] ", BytesRet);
@@ -165,6 +182,8 @@ int wmain(int argc, WCHAR *argv[]) {
 
     TotalBytesRead.QuadPart=0;
 
+
+// TODO: suport end of disk case eg total bytes written+offset > diskneght
     do {
         if(!NullFile) {
             ZeroMemory(Buff, BUFFER_SIZE);
@@ -173,8 +192,6 @@ int wmain(int argc, WCHAR *argv[]) {
                 error(1, L"Error reading file");
         }
         else {
-            //todo: manage end of disk scenario
-            // if totalbytesread+buffer_size > filesize ...
             BytesRead=BUFFER_SIZE;
         }
 
@@ -184,11 +201,13 @@ int wmain(int argc, WCHAR *argv[]) {
         TotalBytesRead.QuadPart+=BytesRead;
         
         if(n++ % nth==0)
-            wprintf(L"* [%d] [%.1f MB] [%.1f%%]                 \r", 
+            wprintf(L"W [%d] [%.1f MB] [%.1f%%]                 \r", 
                 BytesRead, 
                 (float)TotalBytesRead.QuadPart/1024.0/1024.0, 
                 (float)TotalBytesRead.QuadPart*100/FileSize.QuadPart
             );
+
+        FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE));
     }
     while (BytesRead!=0);
 
@@ -199,8 +218,9 @@ int wmain(int argc, WCHAR *argv[]) {
     if (!DeviceIoControl(hDisk, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &BytesRet, NULL))
         error(1, L"Error on DeviceIoControl FSCTL_UNLOCK_VOLUME [%d] ", BytesRet);
 
-    if (!DeviceIoControl(hDisk, IOCTL_DISK_UPDATE_PROPERTIES, NULL, 0, NULL, 0, &BytesRet, NULL))
-        error(1, L"Error on DeviceIoControl IOCTL_DISK_UPDATE_PROPERTIES [%d] ", BytesRet);
+    if(iswdigit(DiskNo[0]))
+        if (!DeviceIoControl(hDisk, IOCTL_DISK_UPDATE_PROPERTIES, NULL, 0, NULL, 0, &BytesRet, NULL))
+            error(1, L"Error on DeviceIoControl IOCTL_DISK_UPDATE_PROPERTIES [%d] ", BytesRet);
 
 
     CloseHandle(hFile);

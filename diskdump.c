@@ -1,5 +1,6 @@
-// DiskDump 1.0 by Antoni Sawicki <as@tenoware.com>
+// DiskDump 1.2 by Antoni Sawicki <as@tenoware.com>
 // Dumps raw sectors of physical drive in to a file
+// Yet another rawrite or dd for Windows. Features:
 // Allows for an offset / no. 512 sectors to skip
 // Allows to specify max size of bytes to be dumped
 #include <windows.h>
@@ -24,6 +25,7 @@
               L"- get-disk\n"\
               L"- get-physicaldisk | ft deviceid,friendlyname\n\n"\
               L"Long form \\\\.\\PhysicalDriveXX is also allowed\n\n"\
+              L"A and B floppy drives are also allowed\n\n"\
               L"sect_skip is number of 512 bytes sectors to skip from the begining\n\n"\
               L"max_bytes is maximum number of bytes to read from disk\n\n"
 
@@ -64,6 +66,7 @@ int wmain(int argc, WCHAR *argv[]) {
     WCHAR                   *FileName;
     ULONG                   BytesRet;
     GET_LENGTH_INFORMATION  DiskLengthInfo;
+    DISK_GEOMETRY           DiskGeom;
     LARGE_INTEGER           Offset;
     LARGE_INTEGER           MaxBytes;
     LARGE_INTEGER           TotalBytesRead;
@@ -81,7 +84,7 @@ int wmain(int argc, WCHAR *argv[]) {
     WCHAR *ft[] = { L"Non-Removable", L"Removable" };
     WCHAR *bus[] = { L"UNKNOWN", L"SCSI", L"ATAPI", L"ATA", L"1394", L"SSA", L"FC", L"USB", L"RAID", L"ISCSI", L"SAS", L"SATA", L"SD", L"MMC", L"VIRTUAL", L"VHD", L"MAX", L"NVME"};
 
-    wprintf(L"DiskDump v1.1 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
+    wprintf(L"DiskDump v1.2 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
 
     if(argc < 3) 
         error(1, L"Wrong number of parameters [argc=%d]\n\n%s\n", argc, USAGE);
@@ -95,6 +98,8 @@ int wmain(int argc, WCHAR *argv[]) {
         wcsncpy_s(DevName, sizeof(DevName), DiskNo, sizeof(DevName));
     else if(iswdigit(DiskNo[0]))
         _snwprintf_s(DevName, sizeof(DevName) / sizeof(WCHAR), sizeof(DevName), L"\\\\.\\PhysicalDrive%s", DiskNo);
+    else if(DiskNo[0]=='a' || DiskNo[0]=='A' || DiskNo[0]=='b' || DiskNo[0]=='B')
+        _snwprintf_s(DevName, sizeof(DevName) / sizeof(WCHAR), sizeof(DevName), L"\\\\.\\%c:", DiskNo[0]);
     else
         error(1, USAGE, argv[0]);
 
@@ -102,11 +107,20 @@ int wmain(int argc, WCHAR *argv[]) {
     if((hDisk = CreateFileW(DevName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL)) == INVALID_HANDLE_VALUE)
         error(1, L"Cannot open %s", DevName);
 
+    // Disable Boundary Checks
     if(DeviceIoControl(hDisk, FSCTL_ALLOW_EXTENDED_DASD_IO, NULL, 0, NULL, 0, &BytesRet, NULL))
         error(1, L"Error on DeviceIoControl FSCTL_ALLOW_EXTENDED_DASD_IO");
 
-    if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0, &DiskLengthInfo, sizeof(GET_LENGTH_INFORMATION), &BytesRet, NULL))
-        error(1, L"Error on DeviceIoControl IOCTL_DISK_GET_LENGTH_INFO [%d] ", BytesRet);
+    // Try to obtain disk lenght. On removable media the first DISK_GET_LENGTH is not supported
+    if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0, &DiskLengthInfo, sizeof(GET_LENGTH_INFORMATION), &BytesRet, NULL)) {
+        if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &DiskGeom, sizeof(DISK_GEOMETRY), &BytesRet, NULL)) 
+            error(1, L"Error on DeviceIoControl IOCTL_DISK_GET_DRIVE_GEOMETRY [%d] ", BytesRet);
+        
+        DiskLengthInfo.Length.QuadPart = DiskGeom.Cylinders.QuadPart *  DiskGeom.TracksPerCylinder *  DiskGeom.SectorsPerTrack * DiskGeom.BytesPerSector;
+    }
+
+    if(!DiskLengthInfo.Length.QuadPart)
+        error(1, L"Unable to obtain disk lenght info");
 
     if (!DeviceIoControl(hDisk, IOCTL_STORAGE_QUERY_PROPERTY, &desc_q, sizeof(desc_q), &desc_h, sizeof(desc_h), &BytesRet, NULL))
         error(1, L"Error on DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY Device Property [%d] ", BytesRet);
@@ -120,7 +134,7 @@ int wmain(int argc, WCHAR *argv[]) {
     if(desc_d->Version != sizeof(STORAGE_DEVICE_DESCRIPTOR)) 
         error(1, L"STORAGE_DEVICE_DESCRIPTOR is wrong size [%d] should be [%d]", desc_d->Version, sizeof(STORAGE_DEVICE_DESCRIPTOR));
 
-    wprintf(L"Disk %s: %s %s %S %S Size: %.1f MB  (%llu bytes)  \n", 
+    wprintf(L"Disk %s %s %s %S %S %.1f MB  (%llu bytes)  \n", 
             DiskNo,
             (desc_d->RemovableMedia<=1)  ? ft[desc_d->RemovableMedia] : L"(n/a)",
             (desc_d->BusType<=17)        ? bus[desc_d->BusType] : bus[0],
@@ -131,7 +145,7 @@ int wmain(int argc, WCHAR *argv[]) {
     );
 
     if(MaxBytes.QuadPart > DiskLengthInfo.Length.QuadPart)
-        error(1, "Max Bytes > Disk Size\n");
+        error(1, L"Max Bytes > Disk Size\n");
 
     if(SetFilePointerEx(hDisk, Offset, NULL, FILE_BEGIN) == 0) 
         error(1, L"Unable to Set File Pointer for Offset [%ull] ", Offset.QuadPart);
@@ -165,19 +179,12 @@ int wmain(int argc, WCHAR *argv[]) {
                 // Reading last sector
                 if (ReadFile(hDisk, Buff, DiskLengthInfo.Length.QuadPart-TotalBytesRead.QuadPart, &BytesRead, NULL) == 0)
                     error(0, L"While reading last sector of the disk, Status=%d BytesToRead=%llu BytesRead=%d", 
-                        ret, 
-                        DiskLengthInfo.Length.QuadPart-TotalBytesRead.QuadPart, 
-                        BytesRead
-                 );
+                        ret, DiskLengthInfo.Length.QuadPart-TotalBytesRead.QuadPart, BytesRead
+                    );
             }
             else {
                 error(0, L"While reading disk!\n  Status=%d\n  DiskLength=%llu\n  TotalBytesRead=%llu\n  Diff=%llu\n  Offset=%llu\n  BytesRead=%d\n", 
-                    ret,
-                    DiskLengthInfo.Length.QuadPart, 
-                    TotalBytesRead.QuadPart, 
-                    DiskLengthInfo.Length.QuadPart-TotalBytesRead.QuadPart, 
-                    Offset.QuadPart, 
-                    BytesRead
+                    ret, DiskLengthInfo.Length.QuadPart, TotalBytesRead.QuadPart, DiskLengthInfo.Length.QuadPart-TotalBytesRead.QuadPart, Offset.QuadPart,  BytesRead
                 );
             }
         }
@@ -188,11 +195,13 @@ int wmain(int argc, WCHAR *argv[]) {
         TotalBytesRead.QuadPart+=BytesRead;
         
         if(n++ % nth==0)
-            wprintf(L"* [%d] [%.1f MB] [%.1f%%]                 \r", 
+            wprintf(L"R [%d] [%.1f MB] [%.1f%%]                 \r", 
                 BytesRead, 
                 (float)TotalBytesRead.QuadPart/1024.0/1024.0, 
                 (float)TotalBytesRead.QuadPart*100/DiskLengthInfo.Length.QuadPart
             );
+
+        FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE));
     }
     while (BytesRead!=0);
 
