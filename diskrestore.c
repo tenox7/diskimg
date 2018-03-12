@@ -113,8 +113,8 @@ int wmain(int argc, WCHAR *argv[]) {
     if(!DeviceIoControl(hDisk, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0, &BytesRet, NULL))
         error(1, L"Error on DeviceIoControl FSCTL_LOCK_VOLUME [%d] ", BytesRet);
 
-    if(DeviceIoControl(hDisk, FSCTL_ALLOW_EXTENDED_DASD_IO, NULL, 0, NULL, 0, &BytesRet, NULL))
-        error(1, L"Error on DeviceIoControl FSCTL_ALLOW_EXTENDED_DASD_IO");
+    if(iswdigit(DiskNo[0]) && DeviceIoControl(hDisk, FSCTL_ALLOW_EXTENDED_DASD_IO, NULL, 0, NULL, 0, &BytesRet, NULL))
+        error(0, L"Error on DeviceIoControl FSCTL_ALLOW_EXTENDED_DASD_IO");
 
     // Try to obtain disk lenght. On removable media the first DISK_GET_LENGTH is not supported
     if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0, &DiskLengthInfo, sizeof(GET_LENGTH_INFORMATION), &BytesRet, NULL)) {
@@ -129,16 +129,16 @@ int wmain(int argc, WCHAR *argv[]) {
 
 
     if (!DeviceIoControl(hDisk, IOCTL_STORAGE_QUERY_PROPERTY, &desc_q, sizeof(desc_q), &desc_h, sizeof(desc_h), &BytesRet, NULL))
-        error(1, L"Error on DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY Device Property [%d] ", BytesRet);
+        error(0, L"Error on DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY Device Property [%d] ", BytesRet);
 
     desc_d = malloc(desc_h.Size);
     ZeroMemory(desc_d, desc_h.Size);
 
     if(!DeviceIoControl(hDisk, IOCTL_STORAGE_QUERY_PROPERTY, &desc_q, sizeof(desc_q), desc_d, desc_h.Size, &BytesRet, NULL))
-        error(1, L"Error on DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY [%d] ", BytesRet);
+        error(0, L"Error on DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY [%d] ", BytesRet);
 
     if(desc_d->Version != sizeof(STORAGE_DEVICE_DESCRIPTOR)) 
-        error(1, L"STORAGE_DEVICE_DESCRIPTOR is wrong size [%d] should be [%d]", desc_d->Version, sizeof(STORAGE_DEVICE_DESCRIPTOR));
+        error(0, L"STORAGE_DEVICE_DESCRIPTOR is wrong size [%d] should be [%d]", desc_d->Version, sizeof(STORAGE_DEVICE_DESCRIPTOR));
 
     wprintf(L"Disk %s %s %s %S %S %.1f MB  (%llu bytes)  \n", 
             DiskNo,
@@ -190,18 +190,18 @@ int wmain(int argc, WCHAR *argv[]) {
     TotalBytesWritten.QuadPart=0;
 
     do {
-        if(!NullFile) {
+        if(NullFile) {
+            if(TotalBytesWritten.QuadPart + Offset.QuadPart + BUFFER_SIZE > DiskLengthInfo.Length.QuadPart)
+                BytesRead=DiskLengthInfo.Length.QuadPart-(TotalBytesWritten.QuadPart+Offset.QuadPart);
+            else
+                BytesRead=BUFFER_SIZE;
+        }
+        else {
             ZeroMemory(Buff, BUFFER_SIZE);
 
             if (ReadFile(hFile, Buff, BUFFER_SIZE, &BytesRead, NULL) == 0) 
                 error(1, L"Error reading file");
         }
-        else {
-            BytesRead=BUFFER_SIZE;
-        }
-
-        if(TotalBytesWritten.QuadPart+Offset.QuadPart+BytesRead > DiskLengthInfo.Length.QuadPart)
-            BytesRead=DiskLengthInfo.Length.QuadPart-(TotalBytesWritten.QuadPart+Offset.QuadPart);
 
         if (WriteFile(hDisk, Buff, BytesRead, &BytesWritten, NULL) == 0)
             error(1, L"Error writing to disk");
@@ -209,14 +209,14 @@ int wmain(int argc, WCHAR *argv[]) {
         TotalBytesRead.QuadPart+=BytesRead;
         TotalBytesWritten.QuadPart+=BytesWritten;
         
-        if(n++ % nth==0)
+        if(n++ % nth==0) {
             wprintf(L"W [%d] [%.1f MB] [%.1f%%]                 \r", 
                 BytesRead, 
                 (float)TotalBytesRead.QuadPart/1024.0/1024.0, 
                 (float)TotalBytesRead.QuadPart*100/FileSize.QuadPart
             );
-
-        FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE));
+            FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE));
+        }
     }
     while (BytesRead);
 
@@ -237,3 +237,4 @@ int wmain(int argc, WCHAR *argv[]) {
 
     return 0;
 }
+
