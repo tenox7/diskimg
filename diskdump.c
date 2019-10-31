@@ -3,6 +3,10 @@
 // Yet another rawrite or dd for Windows. Features:
 // Allows for an offset / no. 512 sectors to skip
 // Allows to specify max size of bytes to be dumped
+//
+// Copyright (c) 2006-2018 by Antoni Sawicki
+// Copyright (c) 2019 by Google LLC
+// License: Apache 2.0
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,13 +24,14 @@
               L"Writes contents of <disk#> info file <filename>\n\n"\
               L"Disk# number can be obtained from:\n"\
               L"- Disk Management (diskmgmt.msc)\n"\
-              L"- diskpart (list disk)\n"\
-              L"- wmic diskdrive get index,caption,size\n"\
-              L"- get-disk\n"\
-              L"- get-physicaldisk | ft deviceid,friendlyname\n\n"\
-              L"Long form \\\\.\\PhysicalDriveXX is also allowed\n\n"\
-              L"A and B floppy drives are also allowed\n\n"\
-              L"sect_skip is number of 512 bytes sectors to skip from the begining\n\n"\
+              L"- cmd: diskpart> list disk\n"\
+              L"- cmd: wmic diskdrive get index,caption,size\n"\
+              L"- cmd: lsblk\n"\
+              L"- ps: get-disk\n"\
+              L"- ps: get-physicaldisk | ft deviceid,friendlyname\n"\
+              L"Long form \\\\.\\PhysicalDriveXX is also allowed\n"\
+              L"Disk# can also be A and B for floppy drives\n\n"\
+              L"sect_skip is number of 512 bytes sectors to skip\n\n"
               L"max_bytes is maximum number of bytes to read from disk\n\n"
 
 void error(int exit, WCHAR *msg, ...) {
@@ -68,7 +73,7 @@ int wmain(int argc, WCHAR *argv[]) {
     GET_LENGTH_INFORMATION  DiskLengthInfo;
     DISK_GEOMETRY           DiskGeom;
     LARGE_INTEGER           Offset;
-    LARGE_INTEGER           MaxBytes;
+    LARGE_INTEGER           MaxBytes; // user specified 
     LARGE_INTEGER           TotalBytesRead;
     LARGE_INTEGER           FileSize;
     LARGE_INTEGER           Zero;
@@ -107,42 +112,45 @@ int wmain(int argc, WCHAR *argv[]) {
     if((hDisk = CreateFileW(DevName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL)) == INVALID_HANDLE_VALUE)
         error(1, L"Cannot open %s", DevName);
 
-    // Disable Boundary Checks
-    if(iswdigit(DiskNo[0]) && DeviceIoControl(hDisk, FSCTL_ALLOW_EXTENDED_DASD_IO, NULL, 0, NULL, 0, &BytesRet, NULL))
-        error(0, L"Error on DeviceIoControl FSCTL_ALLOW_EXTENDED_DASD_IO");
+    __try {
+        // Disable Boundary Checks
+        if(iswdigit(DiskNo[0]) && DeviceIoControl(hDisk, FSCTL_ALLOW_EXTENDED_DASD_IO, NULL, 0, NULL, 0, &BytesRet, NULL))
+            error(0, L"Error on DeviceIoControl FSCTL_ALLOW_EXTENDED_DASD_IO");
 
-    // Try to obtain disk lenght. On removable media the first DISK_GET_LENGTH is not supported
-    if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0, &DiskLengthInfo, sizeof(GET_LENGTH_INFORMATION), &BytesRet, NULL)) {
-        if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &DiskGeom, sizeof(DISK_GEOMETRY), &BytesRet, NULL)) 
-            error(1, L"Error on DeviceIoControl IOCTL_DISK_GET_DRIVE_GEOMETRY [%d] ", BytesRet);
-        
-        DiskLengthInfo.Length.QuadPart = DiskGeom.Cylinders.QuadPart *  DiskGeom.TracksPerCylinder *  DiskGeom.SectorsPerTrack * DiskGeom.BytesPerSector;
-    }
+        // Try to obtain disk length. On removable media the first DISK_GET_LENGTH is not supported
+        if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0, &DiskLengthInfo, sizeof(GET_LENGTH_INFORMATION), &BytesRet, NULL)) {
+            if(!DeviceIoControl(hDisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &DiskGeom, sizeof(DISK_GEOMETRY), &BytesRet, NULL)) 
+                error(1, L"Error on DeviceIoControl IOCTL_DISK_GET_DRIVE_GEOMETRY [%d] ", BytesRet);
+            
+            DiskLengthInfo.Length.QuadPart = DiskGeom.Cylinders.QuadPart *  DiskGeom.TracksPerCylinder *  DiskGeom.SectorsPerTrack * DiskGeom.BytesPerSector;
+        }
 
-    if(!DiskLengthInfo.Length.QuadPart)
-        error(1, L"Unable to obtain disk lenght info");
+        if(!DiskLengthInfo.Length.QuadPart)
+            error(1, L"Unable to obtain disk length info");
 
-    if (!DeviceIoControl(hDisk, IOCTL_STORAGE_QUERY_PROPERTY, &desc_q, sizeof(desc_q), &desc_h, sizeof(desc_h), &BytesRet, NULL))
-        error(0, L"Error on DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY Device Property [%d] ", BytesRet);
+        if (!DeviceIoControl(hDisk, IOCTL_STORAGE_QUERY_PROPERTY, &desc_q, sizeof(desc_q), &desc_h, sizeof(desc_h), &BytesRet, NULL))
+            error(0, L"Error on DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY Device Property [%d] ", BytesRet);
 
-    desc_d = malloc(desc_h.Size);
-    ZeroMemory(desc_d, desc_h.Size);
+        desc_d = malloc(desc_h.Size);
+        ZeroMemory(desc_d, desc_h.Size);
 
-    if (!DeviceIoControl(hDisk, IOCTL_STORAGE_QUERY_PROPERTY, &desc_q, sizeof(desc_q), desc_d, desc_h.Size, &BytesRet, NULL))
-        error(0, L"Error on DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY [%d] ", BytesRet);
+        if (!DeviceIoControl(hDisk, IOCTL_STORAGE_QUERY_PROPERTY, &desc_q, sizeof(desc_q), desc_d, desc_h.Size, &BytesRet, NULL))
+            error(0, L"Error on DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY [%d] ", BytesRet);
 
-    if(desc_d->Version != sizeof(STORAGE_DEVICE_DESCRIPTOR)) 
-        error(0, L"STORAGE_DEVICE_DESCRIPTOR is wrong size [%d] should be [%d]", desc_d->Version, sizeof(STORAGE_DEVICE_DESCRIPTOR));
+        if(desc_d->Version != sizeof(STORAGE_DEVICE_DESCRIPTOR)) 
+            error(0, L"STORAGE_DEVICE_DESCRIPTOR is wrong size [%d] should be [%d]", desc_d->Version, sizeof(STORAGE_DEVICE_DESCRIPTOR));
 
-    wprintf(L"Disk %s %s %s %S %S %.1f MB  (%llu bytes)  \n", 
-            DiskNo,
-            (desc_d->RemovableMedia<=1)  ? ft[desc_d->RemovableMedia] : L"(n/a)",
-            (desc_d->BusType<=17)        ? bus[desc_d->BusType] : bus[0],
-            (desc_d->VendorIdOffset) ? (char*)desc_d+desc_d->VendorIdOffset : "n/a", 
-            (desc_d+desc_d->ProductIdOffset) ? (char*)desc_d+desc_d->ProductIdOffset : "n/a",
-            (float)DiskLengthInfo.Length.QuadPart / 1024.0 / 1024.0,
-            DiskLengthInfo.Length.QuadPart
-    );
+        wprintf(L"Disk %s %s %s %S %S %.1f MB  (%llu bytes)  \n", 
+                DiskNo,
+                (desc_d->RemovableMedia<=1)  ? ft[desc_d->RemovableMedia] : L"(n/a)",
+                (desc_d->BusType<=17)        ? bus[desc_d->BusType] : bus[0],
+                (desc_d->VendorIdOffset) ? (char*)desc_d+desc_d->VendorIdOffset : "n/a", 
+                (desc_d+desc_d->ProductIdOffset) ? (char*)desc_d+desc_d->ProductIdOffset : "n/a",
+                (float)DiskLengthInfo.Length.QuadPart / 1024.0 / 1024.0,
+                DiskLengthInfo.Length.QuadPart
+        );
+    } __except(1) {
+    };
 
     if(MaxBytes.QuadPart > DiskLengthInfo.Length.QuadPart)
         error(1, L"Max Bytes > Disk Size\n");
@@ -234,4 +242,3 @@ int wmain(int argc, WCHAR *argv[]) {
 
     return 0;
 }
-
