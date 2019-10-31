@@ -10,12 +10,12 @@ Yet another Rawrite or DD for Windows.
 * allows sector skip 
 * supports nul file for just erasing media (aka `dd if=/dev/zero`)
 
-These utilities are useful for targetting specific targets of [SCSI2SD](https://github.com/vivier/SCSI2SD) media by offset.
+Sector skip is useful for reading and writing images in specific targets of [SCSI2SD](https://github.com/vivier/SCSI2SD) media by offset.
 
 ## legal
 
 ```
-// Copyright (c) 2006-2018 by Antoni Sawicki
-// Copyright (c) 2019 by Google LLC
-// License: Apache 2.0
+Copyright (c) 2006-2018 by Antoni Sawicki
+Copyright (c) 2019 by Google LLC
+License: Apache 2.0
 ```
