@@ -31,7 +31,7 @@
               L"- ps: get-physicaldisk | ft deviceid,friendlyname\n"\
               L"Long form \\\\.\\PhysicalDriveXX is also allowed\n"\
               L"Disk# can also be A and B for floppy drives\n\n"\
-              L"sect_skip is number of 512 bytes sectors to skip\n\n"
+              L"sect_skip is number of 512 bytes sectors to skip\n\n"\
               L"max_bytes is maximum number of bytes to read from disk\n\n"
 
 void error(int exit, WCHAR *msg, ...) {
@@ -89,7 +89,7 @@ int wmain(int argc, WCHAR *argv[]) {
     WCHAR *ft[] = { L"Non-Removable", L"Removable" };
     WCHAR *bus[] = { L"UNKNOWN", L"SCSI", L"ATAPI", L"ATA", L"1394", L"SSA", L"FC", L"USB", L"RAID", L"ISCSI", L"SAS", L"SATA", L"SD", L"MMC", L"VIRTUAL", L"VHD", L"MAX", L"NVME"};
 
-    wprintf(L"DiskDump v1.2 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
+    wprintf(L"DiskDump v1.2.1 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
 
     if(argc < 3) 
         error(1, L"Wrong number of parameters [argc=%d]\n\n%s\n", argc, USAGE);
