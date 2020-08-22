@@ -12,6 +12,11 @@ Yet another Rawrite or DD for Windows.
 
 Sector skip is useful for reading and writing images in specific targets of [SCSI2SD](https://github.com/vivier/SCSI2SD) media by offset.
 
+## diskclean
+* quickly cleans disk layout, partitions, mbr
+* exactly same as `diskpart clean`
+* does NOT perform full format / data erase
+
 ## legal
 
 ```
