@@ -1,8 +1,6 @@
-// DiskRestore 1.2 by Antoni Sawicki <as@tenoware.com>
-// Restores raw sectors from a file to physical drive
-// Yet another rawrite or dd for Windows. Features:
-// Allows for an offset / no. 512 sectors to skip
-// Allows file "nul" it will just erase disk (dd if=/dev/zero)
+// DiskClean 1.2 by Antoni Sawicki <as@tenoware.com>
+// Removes disk layout, partitions, mbr
+// Similar to diskpart clean
 //
 // Copyright (c) 2006-2018 by Antoni Sawicki
 // Copyright (c) 2019 by Google LLC
