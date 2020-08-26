@@ -17,6 +17,9 @@ Sector skip is useful for reading and writing images in specific targets of [SCS
 * exactly same as `diskpart clean` but without waiting for VDS
 * does NOT perform full format / data erase
 
+## diskeject
+* ejects removable media
+
 ## legal
 
 ```
