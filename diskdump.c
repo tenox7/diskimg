@@ -13,7 +13,7 @@
 #include <wchar.h>
 #include <stdarg.h>
 
-#define BUFFER_SIZE 65536 //65k seems to be the standard for "sequential io"
+#define BUFFER_SIZE 1 << 20 // 1 MB
 
 #define WIDEN2(x) L ## x
 #define WIDEN(x) WIDEN2(x)
@@ -246,4 +246,3 @@ int wmain(int argc, WCHAR* argv[]) {
 
     return 0;
 }
-
