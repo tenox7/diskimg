@@ -6,7 +6,7 @@ Yet another Rawrite or DD for Windows.
 * allows sector skip and max bytes if you want to dump specific region and length
 
 ## diskrestore 
-* restores contents of an image file to a disk
+* restores contents of an image file (raw/dd) to a disk
 * allows sector skip (aka `dd seek=N`) useful for SCSI2SD
 * supports nul file for just erasing media (aka `dd if=/dev/zero`)
 
