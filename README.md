@@ -7,7 +7,7 @@ Yet another Rawrite or DD for Windows.
 
 ## diskrestore 
 * restores contents of an image file to a disk
-* allows sector skip 
+* allows sector skip (aka `dd seek=N`) useful for SCSI2SD
 * supports nul file for just erasing media (aka `dd if=/dev/zero`)
 
 Sector skip is useful for reading and writing images in specific targets of [SCSI2SD](https://github.com/vivier/SCSI2SD) media by offset.
