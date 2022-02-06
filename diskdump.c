@@ -80,16 +80,14 @@ int wmain(int argc, WCHAR* argv[]) {
     size_t                  size = 0;
     DWORD                   BytesRead = 0;
     DWORD                   ret = 0;
-    int                     n = 0;
-    int                     nth = 25; // how often to print status
-    LARGE_INTEGER           pres, pstart, pend;
+    LARGE_INTEGER           pres, pbegin, pstart, pend;
     STORAGE_PROPERTY_QUERY  desc_q = { StorageDeviceProperty,  PropertyStandardQuery };
     STORAGE_DESCRIPTOR_HEADER desc_h = { 0 };
     PSTORAGE_DEVICE_DESCRIPTOR desc_d;
     WCHAR* ft[] = { L"Non-Removable", L"Removable" };
     WCHAR* bus[] = { L"UNKNOWN", L"SCSI", L"ATAPI", L"ATA", L"1394", L"SSA", L"FC", L"USB", L"RAID", L"ISCSI", L"SAS", L"SATA", L"SD", L"MMC", L"VIRTUAL", L"VHD", L"MAX", L"NVME" };
 
-    wprintf(L"DiskDump v1.2.w by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
+    wprintf(L"DiskDump v1.2.3 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
 
     if (argc < 3)
         error(1, L"Wrong number of parameters [argc=%d]\n\n%s\n", argc, USAGE);
@@ -174,7 +172,10 @@ int wmain(int argc, WCHAR* argv[]) {
     if (Buff == NULL)
         error(1, L"Unable to allocate memory");
 
+    QueryPerformanceCounter(&pbegin);
+
     do {
+        QueryPerformanceCounter(&pstart);
         ZeroMemory(Buff, BUFFER_SIZE);
 
         if (MaxBytes.QuadPart && TotalBytesRead.QuadPart >= MaxBytes.QuadPart)
@@ -205,15 +206,16 @@ int wmain(int argc, WCHAR* argv[]) {
             error(1, L"Error writing to file");
 
         TotalBytesRead.QuadPart += BytesRead;
+        QueryPerformanceCounter(&pend);
+        QueryPerformanceFrequency(&pres);
 
-        if (n++ % nth == 0) {
-            wprintf(L"R [%d] [%.1f MB] [%.1f%%]                 \r",
-                BytesRead,
-                (float)TotalBytesRead.QuadPart / 1024.0 / 1024.0,
-                (float)TotalBytesRead.QuadPart * 100 / DiskLengthInfo.Length.QuadPart
-            );
-            FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE));
-        }
+        wprintf(L"R [%d] [%.0f MB] [%.1f%%] [%.1f MB/s]                \r",
+            BytesRead,
+            (float)TotalBytesRead.QuadPart /  (float) (1 << 20),
+            (float)TotalBytesRead.QuadPart * 100 / DiskLengthInfo.Length.QuadPart,
+            ((float)BytesRead / (float) (1 << 20)) / ((float)(pend.QuadPart-pstart.QuadPart)/(float)(pres.QuadPart))
+        );
+        FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE));
 
     } while (BytesRead != 0);
 
@@ -222,10 +224,11 @@ int wmain(int argc, WCHAR* argv[]) {
         SetEndOfFile(hFile);
     }
 
-    wprintf(L"\rDone! [%.1f MB] (%llu bytes) [%.1f%%]                  \n",
-        (float)TotalBytesRead.QuadPart / 1024.0 / 1024.0,
+    wprintf(L"\rDone! [%.0f MB] (%llu bytes) [%.1f%%] [%.1f MB/s]                 \n",
+        (float)TotalBytesRead.QuadPart / (float) (1 << 20),
         TotalBytesRead.QuadPart,
-        (float)TotalBytesRead.QuadPart * 100.0 / DiskLengthInfo.Length.QuadPart
+        (float)TotalBytesRead.QuadPart * 100.0 / DiskLengthInfo.Length.QuadPart,
+        (float)(TotalBytesRead.QuadPart / (1 << 20)) / ((float)(pend.QuadPart-pbegin.QuadPart)/(float)(pres.QuadPart))
     );
 
     GetFileSizeEx(hFile, &FileSize);
@@ -245,4 +248,6 @@ int wmain(int argc, WCHAR* argv[]) {
     HeapFree(GetProcessHeap(), 0, Buff);
 
     return 0;
+}
+;
 }
