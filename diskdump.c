@@ -209,7 +209,7 @@ int wmain(int argc, WCHAR* argv[]) {
         QueryPerformanceCounter(&pend);
         QueryPerformanceFrequency(&pres);
 
-        wprintf(L"R [%d] [%.0f MB] [%.1f%%] [%.1f MB/s]                \r",
+        wprintf(L"R [%d] [%.1f MB] [%.1f%%] [%.1f MB/s]                \r",
             BytesRead,
             (float)TotalBytesRead.QuadPart /  (float) (1 << 20),
             (float)TotalBytesRead.QuadPart * 100 / DiskLengthInfo.Length.QuadPart,
@@ -224,7 +224,7 @@ int wmain(int argc, WCHAR* argv[]) {
         SetEndOfFile(hFile);
     }
 
-    wprintf(L"\rDone! [%.0f MB] (%llu bytes) [%.1f%%] [%.1f MB/s]                 \n",
+    wprintf(L"\rDone! [%.1f MB] (%llu bytes) [%.1f%%] [%.1f MB/s]                 \n",
         (float)TotalBytesRead.QuadPart / (float) (1 << 20),
         TotalBytesRead.QuadPart,
         (float)TotalBytesRead.QuadPart * 100.0 / DiskLengthInfo.Length.QuadPart,

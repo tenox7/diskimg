@@ -1,11 +1,11 @@
-// DiskRestore 1.2 by Antoni Sawicki <as@tenoware.com>
+// DiskRestore 1.3 by Antoni Sawicki <as@tenoware.com>
 // Restores raw sectors from a file to physical drive
 // Yet another rawrite or dd for Windows. Features:
 // Allows for an offset / no. 512 sectors to skip
 // Allows file "nul" it will just erase disk (dd if=/dev/zero)
 //
 // Copyright (c) 2006-2018 by Antoni Sawicki
-// Copyright (c) 2019 by Google LLC
+// Copyright (c) 2019-2022 by Google LLC
 // License: Apache 2.0
 #include <windows.h>
 #include <stdio.h>
@@ -13,7 +13,7 @@
 #include <wchar.h>
 #include <stdarg.h>
 
-#define BUFFER_SIZE 1 << 20
+#define BUFFER_SIZE 1 << 20 // 1 MB
 
 #define WIDEN2(x) L ## x
 #define WIDEN(x) WIDEN2(x)
@@ -82,16 +82,14 @@ int wmain(int argc, WCHAR* argv[]) {
     DWORD                   BytesWritten = 0;
     DWORD                   ret = 0;
     DWORD                   NullFile = 0;
-    int                     n = 0;
-    int                     nth = 25; // how often to print status
-    LARGE_INTEGER           pres, pstart, pend;
+    LARGE_INTEGER           pres, pbegin, pstart, pend;
     STORAGE_PROPERTY_QUERY  desc_q = { StorageDeviceProperty,  PropertyStandardQuery };
     STORAGE_DESCRIPTOR_HEADER desc_h = { 0 };
     PSTORAGE_DEVICE_DESCRIPTOR desc_d;
     WCHAR* ft[] = { L"Non-Removable", L"Removable" };
     WCHAR* bus[] = { L"UNKNOWN", L"SCSI", L"ATAPI", L"ATA", L"1394", L"SSA", L"FC", L"USB", L"RAID", L"ISCSI", L"SAS", L"SATA", L"SD", L"MMC", L"VIRTUAL", L"VHD", L"MAX", L"NVME" };
 
-    wprintf(L"DiskRestore v1.2.1 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
+    wprintf(L"DiskRestore v1.3 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
 
     if (argc < 3)
         error(1, L"Wrong number of parameters [argc=%d]\n\n%s\n", argc, USAGE);
@@ -184,7 +182,7 @@ int wmain(int argc, WCHAR* argv[]) {
     if (FileSize.QuadPart + Offset.QuadPart > DiskLengthInfo.Length.QuadPart)
         error(0, L"File size + offset is larger than disk size!\n%llu + %llu > %llu", FileSize.QuadPart, Offset.QuadPart, DiskLengthInfo.Length.QuadPart);
 
-    wprintf(L"\nWARNING: you are about to overwrite your disk erasing all data!\nThere is no going back after this, continue? (y/N) ?");
+    wprintf(L"\nWARNING: you are about to overwrite your disk erasing all data?!\nThere is no going back after this, continue? (y/N) ?");
     if (getwchar() != L'y')
         error(1, L"\rAborting...\n");
 
@@ -204,7 +202,11 @@ int wmain(int argc, WCHAR* argv[]) {
     if (Buff == NULL)
         error(1, L"Unable to allocate memory");
 
+    QueryPerformanceCounter(&pbegin);
+
     do {
+        QueryPerformanceCounter(&pstart);
+
         if (NullFile) {
             if (TotalBytesWritten.QuadPart + Offset.QuadPart + BUFFER_SIZE > DiskLengthInfo.Length.QuadPart)
                 BytesRead = DiskLengthInfo.Length.QuadPart - (TotalBytesWritten.QuadPart + Offset.QuadPart);
@@ -223,20 +225,26 @@ int wmain(int argc, WCHAR* argv[]) {
 
         TotalBytesRead.QuadPart += BytesRead;
         TotalBytesWritten.QuadPart += BytesWritten;
+        QueryPerformanceCounter(&pend);
+        QueryPerformanceFrequency(&pres);
 
-        if (n++ % nth == 0) {
-            wprintf(L"W [%d] [%.1f MB] [%.1f%%]                 \r",
-                BytesRead,
-                (float)TotalBytesRead.QuadPart / 1024.0 / 1024.0,
-                (float)TotalBytesRead.QuadPart * 100 / FileSize.QuadPart
-            );
-            FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE));
-        }
+        wprintf(L"W [%d] [%.1f MB] [%.1f%%] [%.1f MB/s]                \r",
+            BytesWritten,
+            (float)TotalBytesRead.QuadPart / (float) (1 << 20),
+            (float)TotalBytesRead.QuadPart * 100.0 / FileSize.QuadPart,
+            ((float)BytesWritten / (float) (1 << 20)) / ((float)(pend.QuadPart-pstart.QuadPart)/(float)(pres.QuadPart))
+        );
+        FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE));
     } while (BytesRead);
 
     FlushFileBuffers(hDisk);
 
-    wprintf(L"\rDone! [%.1f MB] (%llu bytes) [%.1f%%]                  \n", (float)TotalBytesRead.QuadPart / 1024.0 / 1024.0, TotalBytesWritten.QuadPart, (float)TotalBytesWritten.QuadPart * 100.0 / FileSize.QuadPart);
+    wprintf(L"\rDone! [%.1f MB] (%llu bytes) [%.1f%%] [%.1f MB/s]                  \n", 
+        (float)TotalBytesRead.QuadPart / (float) (1 << 20), 
+        TotalBytesWritten.QuadPart, 
+        (float)TotalBytesWritten.QuadPart * 100.0 / FileSize.QuadPart,
+        (float)(TotalBytesWritten.QuadPart / (1 << 20)) / ((float)(pend.QuadPart-pbegin.QuadPart)/(float)(pres.QuadPart))
+   );
 
     if (!DeviceIoControl(hDisk, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &BytesRet, NULL))
         error(1, L"Error on DeviceIoControl FSCTL_UNLOCK_VOLUME [%d] ", BytesRet);
