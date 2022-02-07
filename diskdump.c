@@ -1,11 +1,11 @@
-// DiskDump 1.2 by Antoni Sawicki <as@tenoware.com>
+// DiskDump 1.3 by Antoni Sawicki <as@tenoware.com>
 // Dumps raw sectors of physical drive in to a file
 // Yet another rawrite or dd for Windows. Features:
 // Allows for an offset / no. 512 sectors to skip
 // Allows to specify max size of bytes to be dumped
 //
 // Copyright (c) 2006-2018 by Antoni Sawicki
-// Copyright (c) 2019 by Google LLC
+// Copyright (c) 2019-2022 by Google LLC
 // License: Apache 2.0
 #include <windows.h>
 #include <stdio.h>
@@ -87,7 +87,7 @@ int wmain(int argc, WCHAR* argv[]) {
     WCHAR* ft[] = { L"Non-Removable", L"Removable" };
     WCHAR* bus[] = { L"UNKNOWN", L"SCSI", L"ATAPI", L"ATA", L"1394", L"SSA", L"FC", L"USB", L"RAID", L"ISCSI", L"SAS", L"SATA", L"SD", L"MMC", L"VIRTUAL", L"VHD", L"MAX", L"NVME" };
 
-    wprintf(L"DiskDump v1.2.3 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
+    wprintf(L"DiskDump v1.3 by Antoni Sawicki <as@tenoware.com>, Build %s %s\n\n", __WDATE__, __WTIME__);
 
     if (argc < 3)
         error(1, L"Wrong number of parameters [argc=%d]\n\n%s\n", argc, USAGE);
@@ -249,5 +249,4 @@ int wmain(int argc, WCHAR* argv[]) {
 
     return 0;
 }
-;
-}
+
