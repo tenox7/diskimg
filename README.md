@@ -22,8 +22,10 @@ Sector skip is useful for reading and writing images in specific targets of [SCS
 
 ## legal
 
+Improper use may cause data loss. I take no resposibility for your data what so ever.
+
 ```
 Copyright (c) 2006-2018 by Antoni Sawicki
-Copyright (c) 2019 by Google LLC
+Copyright (c) 2019-2022 by Google LLC
 License: Apache 2.0
 ```
