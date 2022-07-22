@@ -2,7 +2,7 @@
 # disk image restore for macos
 usg="usage: $0 <file> <disk#>"
 src="${1?:No src file specified, ${usg}}"
-dst="/dev/rdisk${2?:No dst disk# specified, ${usg}"
+dst="/dev/rdisk${2?:No dst disk# specified, ${usg}}"
 bs="1m"
 diskutil unmountDisk "${dst}"
 diskutil zeroDisk short "${dst}"
