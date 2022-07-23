@@ -14,3 +14,4 @@ case "${src}" in
     *)     cmd="dd if=${src} bs=${bs}";;
 esac
 ${cmd} | dd of="${dst}" bs="$bs" status="progress"
+diskutil eject "${dst}"
