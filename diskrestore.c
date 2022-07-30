@@ -150,7 +150,7 @@ int wmain(int argc, WCHAR* argv[]) {
             (desc_d->BusType < ARRAYSIZE(bus)) ? bus[desc_d->BusType] : bus[0],
             (desc_d->VendorIdOffset) ? (char*)desc_d + desc_d->VendorIdOffset : "n/a",
             (desc_d + desc_d->ProductIdOffset) ? (char*)desc_d + desc_d->ProductIdOffset : "n/a",
-            (float)DiskLengthInfo.Length.QuadPart / 1024.0 / 1024.0,
+            (float)DiskLengthInfo.Length.QuadPart / (float)(1 << 20),
             DiskLengthInfo.Length.QuadPart,
             DiskLengthInfo.Length.QuadPart
         );
@@ -163,7 +163,13 @@ int wmain(int argc, WCHAR* argv[]) {
         error(1, L"Unable to Set File Pointer for Offset [%ull] ", Offset.QuadPart);
 
     if (Offset.QuadPart)
-        wprintf(L"Offset: %llu (0x%llX) sectors, %llu (0x%llX) bytes\n", _wtoi64(argv[3]), _wtoi64(argv[3]), Offset.QuadPart, Offset.QuadPart);
+        wprintf(L"Offset: %llu (0x%llX) 512b sectors, %.1f MB (%llu bytes) (0x%llX)\n",
+		_wtoi64(argv[3]),
+		_wtoi64(argv[3]),
+		(float)Offset.QuadPart / (float)(1 << 20),
+		Offset.QuadPart,
+		Offset.QuadPart
+	);
 
     // Open File
     if (!NullFile) {
