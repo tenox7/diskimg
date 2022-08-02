@@ -14,5 +14,5 @@ case "${src}" in
     *.bz2) cmd="bzip2 -dc ${src}";;
     *)     cmd="dd if=${src} bs=${bs} status=none";;
 esac
-${cmd} | dd of="${dst}" bs="$bs" status="progress"
+${cmd} | sudo dd of="${dst}" bs="$bs" status="progress"
 diskutil eject "${dst}"
