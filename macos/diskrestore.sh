@@ -9,7 +9,7 @@ diskutil unmountDisk "${dst}"
 [ "${erase}" = true ] && diskutil zeroDisk short "${dst}"
 case "${src}" in
     *.lz)  cmd="lzip -dc ${src}";;
-    *.xz)  md="xz -dc ${src}";;
+    *.xz)  cmd="xz -dc ${src}";;
     *.gz)  cmd="gzip -dc ${src}";;
     *.bz2) cmd="bzip2 -dc ${src}";;
     *)     cmd="dd if=${src} bs=${bs} status=none";;
