@@ -1,11 +1,12 @@
 #!/bin/bash -e
 # disk image restore for macos
-usg="usage: $0 <file> <disk#>"
+usg="usage: $0 [-z] <file> <disk#>"
+[ "${1}" = "-z" ] && { erase=true; shift; }
 src="${1?:No src file specified, ${usg}}"
 dst="/dev/rdisk${2?:No dst disk# specified, ${usg}}"
 bs="1m"
 diskutil unmountDisk "${dst}"
-diskutil zeroDisk short "${dst}"
+[ "${erase}" = true ] && diskutil zeroDisk short "${dst}"
 case "${src}" in
     *.lz)  cmd="lzip -dc ${src}";;
     *.xz)  md="xz -dc ${src}";;
