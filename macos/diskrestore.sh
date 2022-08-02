@@ -12,7 +12,7 @@ case "${src}" in
     *.xz)  md="xz -dc ${src}";;
     *.gz)  cmd="gzip -dc ${src}";;
     *.bz2) cmd="bzip2 -dc ${src}";;
-    *)     cmd="dd if=${src} bs=${bs}";;
+    *)     cmd="dd if=${src} bs=${bs} status=none";;
 esac
 ${cmd} | dd of="${dst}" bs="$bs" status="progress"
 diskutil eject "${dst}"
