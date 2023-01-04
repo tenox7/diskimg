@@ -29,6 +29,10 @@ Sector skip is useful for reading and writing images in specific targets of [SCS
 
 [disktrim](https://github.com/tenox7/disktrim) is a separate project
 
+## list disks
+
+- [lsblk](https://github.com/tenox7/lsblk)
+- [listdisk](https://github.com/tenox7/listdisk)
 
 ## legal
 
