@@ -1,5 +1,5 @@
 set OPATH=%PATH%
-set VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"
+set VCVARS="C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat"
 del *.exe *.obj
 
 set INCLUDE= & set LIB= & set LIBPATH= & PATH=%OPATH%
