@@ -13,6 +13,7 @@ case "${src}" in
     *.xz)  cmd="xz -dc '${src}'";;
     *.gz)  cmd="gzip -dc '${src}'";;
     *.bz2) cmd="bzip2 -dc '${src}'";;
+    *.zst) cmd="zstd -dc '${src}'";;
     *)     cmd="dd if='${src}' bs=${bs} status=none";;
 esac
 eval "${cmd}" | sudo dd of="${dst}" bs="${bs}" status="progress" oseek="${ofs}"
