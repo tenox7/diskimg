@@ -47,35 +47,40 @@ cmd_mount() {
     [ -f "$1" ] || die "file not found: $1"
     [ -n "$2" ] || die "partition number required"
     local img=$1 partnum=$2 mntpt=$3
+
     local plist=$(mktemp) || die "mktemp failed"
     trap "rm -f $plist" RETURN
-    hdiutil imageinfo -plist "$img" > "$plist" || die "hdiutil failed"
+    hdiutil attach -nomount -plist "$img" > "$plist" || die "hdiutil attach failed"
 
-    local bs=$(pval :partitions:block-size "$plist")
-    local count=$(plutil -extract partitions.partitions raw "$plist")
-    local start="" len=""
-
+    local count=$(plutil -extract system-entities raw "$plist")
+    local basedev="" slicedev=""
     for ((i=0; i<count; i++)); do
-        local p=":partitions:partitions:${i}"
-        local num=$(pval "${p}:partition-number" "$plist")
-        [ "$num" = "$partnum" ] || continue
-        start=$(pval "${p}:partition-start" "$plist")
-        len=$(pval "${p}:partition-length" "$plist")
-        break
+        local dev=$(pval ":system-entities:${i}:dev-entry" "$plist")
+        local hint=$(pval ":system-entities:${i}:content-hint" "$plist")
+        [[ "$hint" == *partition_scheme* ]] && basedev=$dev
+        [[ "$dev" == *s${partnum} ]] && slicedev=$dev
     done
+    [ -n "$basedev" ] || die "failed to get base device"
+    [ -n "$slicedev" ] || die "partition $partnum not found in attached devices"
 
-    [ -n "$start" ] || die "partition $partnum not found"
-
-    local args=(-imagekey diskimage-class=CRawDiskImage)
-    args+=(-imagekey "offset=$((start * bs))")
-    args+=(-imagekey "length=$((len * bs))")
-    [ -n "$mntpt" ] && args+=(-mountpoint "$mntpt")
-    hdiutil attach "${args[@]}" "$img"
+    if [ -n "$mntpt" ]; then
+        diskutil mount -mountPoint "$mntpt" "$slicedev" || { hdiutil detach "$basedev"; die "mount failed"; }
+    else
+        diskutil mount "$slicedev" || { hdiutil detach "$basedev"; die "mount failed"; }
+    fi
+    echo "Attached image on $basedev, mounted $slicedev"
 }
 
 cmd_umount() {
     [ -n "$1" ] || die "device or mountpoint required"
-    hdiutil detach "$1"
+    local dev=$1
+    if [[ "$dev" == *s* ]]; then
+        local basedev=${dev%s*}
+        diskutil unmount "$dev"
+        hdiutil detach "$basedev"
+    else
+        hdiutil detach "$dev"
+    fi
 }
 
 [ $# -ge 1 ] || usage
